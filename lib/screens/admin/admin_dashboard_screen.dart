@@ -5,6 +5,7 @@ import 'package:atoms_innovation_hub/services/auth_service.dart';
 import 'package:atoms_innovation_hub/services/app_service.dart';
 import 'package:atoms_innovation_hub/services/blog_service.dart';
 import 'package:atoms_innovation_hub/services/contact_service.dart';
+import 'package:atoms_innovation_hub/services/rating_service.dart';
 import 'package:atoms_innovation_hub/models/app_model.dart';
 import 'package:atoms_innovation_hub/models/blog_post_model.dart';
 import 'package:atoms_innovation_hub/models/contact_message_model.dart';
@@ -14,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -969,14 +971,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             child: app.imageUrl.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      app.imageUrl,
+                                    child: CachedNetworkImage(
+                                      imageUrl: app.imageUrl,
                                       width: 80,
                                       height: 80,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(Icons.apps, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5));
-                                      },
                                     ),
                                   )
                                 : Icon(Icons.apps, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
@@ -1000,18 +999,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 8),
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     _buildStatChip(
                                       icon: Icons.download,
                                       label: '${app.downloadCount} downloads',
                                       color: Colors.blue,
                                     ),
-                                    const SizedBox(width: 8),
                                     _buildStatChip(
                                       icon: Icons.new_releases,
                                       label: 'v${app.version}',
                                       color: Colors.green,
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.thumb_up, color: Colors.orange, size: 18),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            app.likes.length.toString(),
+                                            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.thumb_down, color: Colors.red, size: 18),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            app.dislikes.length.toString(),
+                                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    FutureBuilder<double>(
+                                      future: RatingService().getAverageRating(app.id),
+                                      builder: (context, snapshot) {
+                                        final rating = snapshot.data ?? 0.0;
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.star, color: Colors.amber, size: 18),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                rating > 0 ? rating.toStringAsFixed(1) : '-',
+                                                style: TextStyle(color: Colors.amber[800], fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
@@ -1120,14 +1181,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             child: post.imageUrl.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      post.imageUrl,
+                                    child: CachedNetworkImage(
+                                      imageUrl: post.imageUrl,
                                       width: 80,
                                       height: 80,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(Icons.article, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5));
-                                      },
                                     ),
                                   )
                                 : Icon(Icons.article, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
@@ -2681,19 +2739,474 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   void _showAddBlogPostDialog() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Blog post creation - Coming Soon!'),
-        backgroundColor: Colors.blue,
+    final titleController = TextEditingController(text: 'New Blog Post');
+    final contentController = TextEditingController(text: 'Write your blog post here...');
+    final imageUrlController = TextEditingController(text: '');
+    final tagsController = TextEditingController(text: '');
+
+    bool isUploading = false;
+    String uploadStatus = '';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF1F2937),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.add, color: Colors.blue, size: 24),
+              const SizedBox(width: 8),
+              const Text(
+                'Add New Blog Post',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: const BoxConstraints(maxHeight: 600),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isUploading) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              uploadStatus,
+                              style: TextStyle(
+                                color: Colors.blue[300],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Text('Title *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: titleController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter blog post title...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.title, color: Colors.grey[500]),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Content *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: contentController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter blog post content...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.article, color: Colors.grey[500]),
+                      ),
+                      maxLines: 8,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Image URL', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: imageUrlController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter image URL (optional)...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.image, color: Colors.grey[500]),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Tags', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: tagsController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'e.g., AI, Technology, Flutter',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.label, color: Colors.grey[500]),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isUploading ? null : () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[400],
+              ),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isUploading ? null : () async {
+                setState(() {
+                  isUploading = true;
+                  uploadStatus = 'Creating blog post...';
+                });
+                try {
+                  await _blogService.addBlogPost(
+                    title: titleController.text,
+                    content: contentController.text,
+                    imageUrl: imageUrlController.text,
+                    tags: tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
+                  );
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Blog post "${titleController.text}" created successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error creating blog post: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  setState(() {
+                    isUploading = false;
+                    uploadStatus = '';
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Create Post'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _showEditBlogPostDialog(BlogPostModel post) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit functionality for ${post.title} - Coming Soon!'),
-        backgroundColor: Colors.orange,
+    final titleController = TextEditingController(text: post.title);
+    final contentController = TextEditingController(text: post.content);
+    final imageUrlController = TextEditingController(text: post.imageUrl);
+    final tagsController = TextEditingController(text: post.tags.join(', '));
+
+    bool isUploading = false;
+    String uploadStatus = '';
+    Uint8List? selectedImageBytes;
+    String? selectedImageName;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF1F2937),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.edit, color: Colors.blue, size: 24),
+              const SizedBox(width: 8),
+              const Text(
+                'Edit Blog Post',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: const BoxConstraints(maxHeight: 600),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Title *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: titleController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter blog post title...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.title, color: Colors.grey[500]),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Content *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: contentController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter blog post content...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.article, color: Colors.grey[500]),
+                      ),
+                      maxLines: 8,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Image', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF111827),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF374151)),
+                          ),
+                          child: TextField(
+                            controller: imageUrlController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Enter image URL or upload a file...',
+                              hintStyle: TextStyle(color: Colors.grey[500]),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.all(12),
+                              prefixIcon: Icon(Icons.image, color: Colors.grey[500]),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          try {
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.image,
+                              allowMultiple: false,
+                            );
+
+                            if (result != null && result.files.isNotEmpty) {
+                              final file = result.files.first;
+                              setState(() {
+                                selectedImageBytes = file.bytes;
+                                selectedImageName = file.name;
+                                uploadStatus = 'Image selected: ${file.name}';
+                              });
+                            }
+                          } catch (e) {
+                            setState(() {
+                              uploadStatus = 'Error selecting image: $e';
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (selectedImageBytes != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      height: 200,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF374151)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          selectedImageBytes!,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Text('Tags', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: tagsController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter tags separated by commas...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.tag, color: Colors.grey[500]),
+                      ),
+                    ),
+                  ),
+                  if (uploadStatus.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      uploadStatus,
+                      style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isUploading ? null : () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[400],
+              ),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isUploading ? null : () async {
+                setState(() {
+                  isUploading = true;
+                  uploadStatus = 'Updating blog post...';
+                });
+                try {
+                  await _blogService.updateBlogPost(
+                    postId: post.id,
+                    title: titleController.text,
+                    content: contentController.text,
+                    imageUrl: imageUrlController.text,
+                    tags: tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
+                    webImageBytes: selectedImageBytes,
+                    imageName: selectedImageName,
+                  );
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Blog post "${titleController.text}" updated successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error updating blog post: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  setState(() {
+                    isUploading = false;
+                    uploadStatus = '';
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Update Post'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -5175,10 +5688,415 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   void _showEditAppDialog(AppModel app) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit functionality for ${app.name} - Coming Soon!'),
-        backgroundColor: Colors.orange,
+    final nameController = TextEditingController(text: app.name);
+    final descriptionController = TextEditingController(text: app.description);
+    final imageUrlController = TextEditingController(text: app.imageUrl);
+    final downloadUrlController = TextEditingController(text: app.downloadUrl);
+    final featuresController = TextEditingController(text: app.features.join(', '));
+    final versionController = TextEditingController(text: app.version);
+
+    bool useImageUrl = app.imageUrl.isNotEmpty;
+    bool useDownloadUrl = app.downloadUrl.isNotEmpty;
+    PlatformFile? selectedImageFile;
+    PlatformFile? selectedApkFile;
+    bool isUploading = false;
+    String uploadStatus = '';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF1F2937),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.edit, color: Colors.blue, size: 24),
+              const SizedBox(width: 8),
+              const Text(
+                'Edit Application',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: const BoxConstraints(maxHeight: 600),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isUploading) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              uploadStatus,
+                              style: TextStyle(
+                                color: Colors.blue[300],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Text('App Name *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: nameController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter app name...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.apps, color: Colors.grey[500]),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Description *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: descriptionController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Enter app description...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.description, color: Colors.grey[500]),
+                      ),
+                      maxLines: 3,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Image Section
+                  Row(
+                    children: [
+                      Text('App Image', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Switch(
+                        value: useImageUrl,
+                        onChanged: (value) {
+                          setState(() {
+                            useImageUrl = value;
+                            if (!value) selectedImageFile = null;
+                          });
+                        },
+                        activeColor: Colors.blue,
+                      ),
+                      Text(useImageUrl ? 'URL' : 'Upload', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (useImageUrl) ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF374151)),
+                      ),
+                      child: TextField(
+                        controller: imageUrlController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Enter image URL (optional)...',
+                          hintStyle: TextStyle(color: Colors.grey[500]),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.all(12),
+                          prefixIcon: Icon(Icons.image, color: Colors.grey[500]),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF374151)),
+                      ),
+                      child: ListTile(
+                        leading: Icon(Icons.image, color: Colors.grey[500]),
+                        title: Text(
+                          selectedImageFile?.name ?? 'No image selected',
+                          style: TextStyle(
+                            color: selectedImageFile != null ? Colors.white : Colors.grey[500],
+                            fontSize: 14,
+                          ),
+                        ),
+                        trailing: ElevatedButton.icon(
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.image,
+                              allowMultiple: false,
+                            );
+                            if (result != null && result.files.isNotEmpty) {
+                              setState(() {
+                                selectedImageFile = result.files.first;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.upload, size: 16),
+                          label: const Text('Select'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[600],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  // Download/APK Section
+                  Row(
+                    children: [
+                      Text('App Download', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Switch(
+                        value: useDownloadUrl,
+                        onChanged: (value) {
+                          setState(() {
+                            useDownloadUrl = value;
+                            if (!value) selectedApkFile = null;
+                          });
+                        },
+                        activeColor: Colors.green,
+                      ),
+                      Text(useDownloadUrl ? 'URL' : 'Upload', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (useDownloadUrl) ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF374151)),
+                      ),
+                      child: TextField(
+                        controller: downloadUrlController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Enter download URL (optional)...',
+                          hintStyle: TextStyle(color: Colors.grey[500]),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.all(12),
+                          prefixIcon: Icon(Icons.download, color: Colors.grey[500]),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF374151)),
+                      ),
+                      child: ListTile(
+                        leading: Icon(Icons.android, color: Colors.grey[500]),
+                        title: Text(
+                          selectedApkFile?.name ?? 'No APK selected',
+                          style: TextStyle(
+                            color: selectedApkFile != null ? Colors.white : Colors.grey[500],
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: selectedApkFile != null
+                            ? Text(
+                                'Size: {(selectedApkFile!.size / 1024 / 1024).toStringAsFixed(1)} MB',
+                                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                              )
+                            : null,
+                        trailing: ElevatedButton.icon(
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['apk'],
+                              allowMultiple: false,
+                            );
+                            if (result != null && result.files.isNotEmpty) {
+                              setState(() {
+                                selectedApkFile = result.files.first;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.upload, size: 16),
+                          label: const Text('Select'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green[600],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Text('Features', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: featuresController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'e.g., Fast, Easy to use, Secure',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.star, color: Colors.grey[500]),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Version *', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF374151)),
+                    ),
+                    child: TextField(
+                      controller: versionController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'e.g., 1.0.0',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(12),
+                        prefixIcon: Icon(Icons.new_releases, color: Colors.grey[500]),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isUploading ? null : () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[400],
+              ),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isUploading ? null : () async {
+                setState(() {
+                  isUploading = true;
+                  uploadStatus = 'Updating app...';
+                });
+                try {
+                  String finalImageUrl = imageUrlController.text.trim();
+                  String finalDownloadUrl = downloadUrlController.text.trim();
+                  String? uploadedImageName;
+                  String? uploadedApkName;
+                  // Upload image file if selected
+                  if (!useImageUrl && selectedImageFile != null) {
+                    uploadStatus = 'Uploading image...';
+                    finalImageUrl = await _blogService.uploadFileFromPicker(
+                      selectedImageFile!,
+                      'blog_images/${DateTime.now().millisecondsSinceEpoch}_${selectedImageFile!.name}',
+                    );
+                    uploadedImageName = selectedImageFile!.name;
+                  }
+                  // Upload APK file if selected
+                  if (!useDownloadUrl && selectedApkFile != null) {
+                    uploadStatus = 'Uploading APK file...';
+                    finalDownloadUrl = await _appService.uploadFileFromPicker(
+                      selectedApkFile!,
+                      'app_files/${DateTime.now().millisecondsSinceEpoch}_${selectedApkFile!.name}',
+                    );
+                    uploadedApkName = selectedApkFile!.name;
+                  }
+                  await _appService.updateApp(
+                    appId: app.id,
+                    name: nameController.text,
+                    description: descriptionController.text,
+                    imageUrl: finalImageUrl,
+                    downloadUrl: finalDownloadUrl,
+                    features: featuresController.text.split(',').map((f) => f.trim()).where((f) => f.isNotEmpty).toList(),
+                    version: versionController.text,
+                    uploadedImageName: uploadedImageName,
+                    uploadedApkName: uploadedApkName,
+                  );
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('App "${nameController.text}" updated successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error updating app: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  setState(() {
+                    isUploading = false;
+                    uploadStatus = '';
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Update'),
+            ),
+          ],
+        ),
       ),
     );
   }

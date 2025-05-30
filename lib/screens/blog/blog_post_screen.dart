@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:atoms_innovation_hub/models/user_model.dart';
 
 class BlogPostScreen extends StatefulWidget {
   final String postId;
@@ -341,7 +342,7 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blog Post'),
+        title: const Text('ATOM Innovation Hub'),
       ),
       body: FutureBuilder<BlogPostModel?>(
         future: _postFuture,
@@ -368,6 +369,17 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
 
           // Use current post state if available, otherwise use snapshot data
           final displayPost = _currentPost ?? post;
+
+          // Move the sortedTopLevelComments declaration here
+          final sortedTopLevelComments = displayPost.comments
+              .where((comment) => comment.parentId == null)
+              .toList();
+          sortedTopLevelComments.sort((a, b) {
+            // Sort by likes count descending, then by createdAt descending (most recent)
+            final likeCompare = b.likes.length.compareTo(a.likes.length);
+            if (likeCompare != 0) return likeCompare;
+            return b.createdAt.compareTo(a.createdAt);
+          });
 
           return SingleChildScrollView(
             child: Column(
@@ -677,7 +689,6 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
                             );
                           }).toList(),
                         ),
-                      
                       const SizedBox(height: 24),
                       
                       // Post Content
@@ -720,29 +731,49 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Consumer<AuthService>(
-                              builder: (context, authService, child) {
+                            Builder(
+                              builder: (context) {
+                                final authService = Provider.of<AuthService>(context, listen: false);
                                 final user = authService.currentUser;
-                                return CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: Colors.grey[600],
-                                  backgroundImage: user?.photoURL?.isNotEmpty == true 
-                                      ? NetworkImage(user!.photoURL!) 
-                                      : null,
-                                  child: user?.photoURL?.isEmpty != false 
-                                    ? Text(
-                                        user?.displayName?.isNotEmpty == true 
-                                          ? user!.displayName![0].toUpperCase()
-                                          : user?.email?.isNotEmpty == true
-                                            ? user!.email![0].toUpperCase()
-                                            : 'A',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
+                                if (user == null) {
+                                  return CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: Colors.grey[600],
+                                    child: Icon(Icons.person, color: Colors.white),
+                                  );
+                                }
+                                return StreamBuilder<UserModel?>(
+                                  stream: authService.userModelStream(user.uid),
+                                  builder: (context, snapshot) {
+                                    final userModel = snapshot.data;
+                                    if (userModel?.photoUrl.isNotEmpty == true) {
+                                      return CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: Colors.grey[600],
+                                        backgroundImage: NetworkImage(userModel!.photoUrl),
+                                      );
+                                    } else {
+                                      final initial = userModel?.name.isNotEmpty == true
+                                          ? userModel!.name[0].toUpperCase()
+                                          : (user.displayName?.isNotEmpty == true
+                                              ? user.displayName![0].toUpperCase()
+                                              : (user.email?.isNotEmpty == true
+                                                  ? user.email![0].toUpperCase()
+                                                  : 'A'));
+                                      return CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: Colors.grey[600],
+                                        child: Text(
+                                          initial,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
                                         ),
-                                      )
-                                    : null,
+                                      );
+                                    }
+                                  },
                                 );
                               },
                             ),
@@ -819,7 +850,7 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
                       const SizedBox(height: 24),
                       
                       // Comments List
-                      if (displayPost.comments.isEmpty)
+                      if (sortedTopLevelComments.isEmpty)
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
@@ -855,546 +886,542 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
                         )
                       else
                         // Show top-level comments with nested replies
-                        ...displayPost.comments
-                            .where((comment) => comment.parentId == null) // Only top-level comments
-                            .map((comment) {
-                              // Find all replies for this comment
-                              final replies = displayPost.comments
-                                  .where((c) => c.parentId == comment.id)
-                                  .toList();
-                              
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                child: Card(
-                                  elevation: 4,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  color: const Color(0xFF2D3748), // Dark card background
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                        ...sortedTopLevelComments.map((comment) {
+                          // Find all replies for this comment
+                          final replies = displayPost.comments
+                              .where((c) => c.parentId == comment.id)
+                              .toList();
+                          
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            child: Card(
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              color: const Color(0xFF2D3748), // Dark card background
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Comment Header
+                                    Row(
                                       children: [
-                                        // Comment Header
-                                        Row(
-                                          children: [
-                                            CircleAvatar(
-                                              radius: 20,
-                                              backgroundColor: Colors.grey[600],
-                                              backgroundImage: comment.userPhotoUrl.isNotEmpty 
-                                                  ? NetworkImage(comment.userPhotoUrl) 
-                                                  : null,
-                                              child: comment.userPhotoUrl.isEmpty 
-                                                  ? Text(
-                                                      comment.userName.isNotEmpty 
-                                                          ? comment.userName[0].toUpperCase() 
-                                                          : '?',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight: FontWeight.bold,
-                                                        fontSize: 16,
-                                                      ),
-                                                    ) 
-                                                  : null,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    comment.userName,
-                                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                      fontWeight: FontWeight.bold,
-                                                      color: Colors.white, // White text on dark background
-                                                    ),
+                                        CircleAvatar(
+                                          radius: 20,
+                                          backgroundColor: Colors.grey[600],
+                                          backgroundImage: comment.userPhotoUrl.isNotEmpty 
+                                              ? NetworkImage(comment.userPhotoUrl) 
+                                              : null,
+                                          child: comment.userPhotoUrl.isEmpty 
+                                              ? Text(
+                                                  comment.userName.isNotEmpty 
+                                                      ? comment.userName[0].toUpperCase() 
+                                                      : '?',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
                                                   ),
-                                                  Text(
-                                                    DateFormat('dd-MM-yyyy HH:mm').format(comment.createdAt),
-                                                    style: TextStyle(
-                                                      color: Colors.grey[400], // Light grey for timestamp
-                                                    ),
-                                                  ),
-                                                ],
+                                                ) 
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                comment.userName,
+                                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white, // White text on dark background
+                                                ),
                                               ),
+                                              Text(
+                                                DateFormat('dd-MM-yyyy HH:mm').format(comment.createdAt),
+                                                style: TextStyle(
+                                                  color: Colors.grey[400], // Light grey for timestamp
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    
+                                    const SizedBox(height: 12),
+                                    
+                                    // Comment Content
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1A202C), // Darker content background
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: const Color(0xFF4A5568), width: 1), // Dark border
+                                      ),
+                                      child: Text(
+                                        comment.content,
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          color: Colors.grey[100], // Light text
+                                          height: 1.4,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                    
+                                    const SizedBox(height: 12),
+                                    
+                                    // Action buttons (Like and Reply)
+                                    Consumer<AuthService>(
+                                      builder: (context, authService, child) {
+                                        final userId = authService.currentUser?.uid;
+                                        final isLiked = userId != null && comment.likes.contains(userId);
+                                        
+                                        return Row(
+                                          children: [
+                                            // Like button
+                                            GestureDetector(
+                                              onTap: userId != null ? () async {
+                                                try {
+                                                  // Optimistically update UI first
+                                                  setState(() {
+                                                    final updatedComments = List<Comment>.from(_currentPost!.comments);
+                                                    final commentIndex = updatedComments.indexWhere((c) => c.id == comment.id);
+                                                    if (commentIndex != -1) {
+                                                      final likes = List<String>.from(updatedComments[commentIndex].likes);
+                                                      if (likes.contains(userId)) {
+                                                        likes.remove(userId);
+                                                      } else {
+                                                        likes.add(userId);
+                                                      }
+                                                      updatedComments[commentIndex] = updatedComments[commentIndex].copyWith(likes: likes);
+                                                      _currentPost = _currentPost!.copyWith(comments: updatedComments);
+                                                    }
+                                                  });
+                                                  
+                                                  // Then update in database
+                                                  final blogService = Provider.of<BlogService>(context, listen: false);
+                                                  await blogService.likeComment(_currentPost!.id, comment.id, userId);
+                                                } catch (e) {
+                                                  // Revert optimistic update on error
+                                                  _loadPost();
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('Error: $e')),
+                                                  );
+                                                }
+                                              } : null,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: isLiked ? Colors.blue.withOpacity(0.2) : const Color(0xFF4A5568), // Dark button background
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(
+                                                    color: isLiked ? Colors.blue : const Color(0xFF718096), // Dark border
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                                                      color: isLiked ? Colors.blue : Colors.grey[300], // Light icon
+                                                      size: 16,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${comment.likes.length}',
+                                                      style: TextStyle(
+                                                        color: isLiked ? Colors.blue : Colors.grey[300], // Light text
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            
+                                            const SizedBox(width: 12),
+                                            
+                                            // Reply button
+                                            GestureDetector(
+                                              onTap: () => _toggleReply(comment.id),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: (_replyingTo[comment.id] ?? false) ? Colors.green.withOpacity(0.2) : const Color(0xFF4A5568), // Dark button background
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(
+                                                    color: (_replyingTo[comment.id] ?? false) ? Colors.green : const Color(0xFF718096), // Dark border
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.reply,
+                                                      color: (_replyingTo[comment.id] ?? false) ? Colors.green : Colors.grey[300], // Light icon
+                                                      size: 16,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Reply',
+                                                      style: TextStyle(
+                                                        color: (_replyingTo[comment.id] ?? false) ? Colors.green : Colors.grey[300], // Light text
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            
+                                            // Show replies count if any
+                                            if (replies.isNotEmpty) ...[
+                                              const SizedBox(width: 16),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.withOpacity(0.2), // Dark blue background
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  border: Border.all(color: Colors.blue.withOpacity(0.3)), // Dark border
+                                                ),
+                                                child: Text(
+                                                  '${replies.length} ${replies.length == 1 ? 'reply' : 'replies'}',
+                                                  style: TextStyle(
+                                                    color: Colors.blue[300], // Light blue text
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                    
+                                    // Reply form
+                                    if (_replyingTo[comment.id] ?? false) ...[
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1A202C), // Dark form background
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFF4A5568)), // Dark border
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Reply to ${comment.userName}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green[300], // Light green text
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Consumer<AuthService>(
+                                                  builder: (context, authService, child) {
+                                                    final user = authService.currentUser;
+                                                    return CircleAvatar(
+                                                      radius: 16,
+                                                      backgroundColor: Colors.grey[600],
+                                                      backgroundImage: user?.photoURL?.isNotEmpty == true 
+                                                          ? NetworkImage(user!.photoURL!) 
+                                                          : null,
+                                                      child: user?.photoURL?.isEmpty != false 
+                                                        ? Text(
+                                                            user?.displayName?.isNotEmpty == true 
+                                                              ? user!.displayName![0].toUpperCase()
+                                                              : user?.email?.isNotEmpty == true
+                                                                ? user!.email![0].toUpperCase()
+                                                                : 'A',
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 14,
+                                                            ),
+                                                          )
+                                                        : null,
+                                                    );
+                                                  },
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                                    children: [
+                                                      TextField(
+                                                        controller: _getReplyController(comment.id),
+                                                        decoration: InputDecoration(
+                                                          hintText: 'Write a reply...',
+                                                          hintStyle: TextStyle(color: Colors.grey[400]), // Light hint text
+                                                          border: OutlineInputBorder(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                            borderSide: BorderSide(color: const Color(0xFF4A5568)), // Dark border
+                                                          ),
+                                                          focusedBorder: OutlineInputBorder(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                            borderSide: const BorderSide(color: Colors.green),
+                                                          ),
+                                                          filled: true,
+                                                          fillColor: const Color(0xFF2D3748), // Dark input background
+                                                          contentPadding: const EdgeInsets.all(12),
+                                                        ),
+                                                        style: const TextStyle(
+                                                          color: Colors.white, // White text
+                                                          fontSize: 14,
+                                                        ),
+                                                        minLines: 1,
+                                                        maxLines: 3,
+                                                      ),
+                                                      const SizedBox(height: 12),
+                                                      Row(
+                                                        mainAxisAlignment: MainAxisAlignment.end,
+                                                        children: [
+                                                          TextButton(
+                                                            onPressed: () {
+                                                              setState(() {
+                                                                _replyingTo[comment.id] = false;
+                                                                _replyControllers[comment.id]?.clear();
+                                                              });
+                                                            },
+                                                            child: Text(
+                                                              'Cancel',
+                                                              style: TextStyle(color: Colors.grey[400]), // Light text
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 8),
+                                                          ElevatedButton(
+                                                            onPressed: _hasReplyText(comment.id) 
+                                                              ? () => _submitReply(comment.id)
+                                                              : null,
+                                                            style: ElevatedButton.styleFrom(
+                                                              backgroundColor: _hasReplyText(comment.id) 
+                                                                ? Colors.green 
+                                                                : Colors.grey[600], // Dark disabled color
+                                                              foregroundColor: Colors.white,
+                                                              shape: RoundedRectangleBorder(
+                                                                borderRadius: BorderRadius.circular(8),
+                                                              ),
+                                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                            ),
+                                                            child: const Text(
+                                                              'Reply',
+                                                              style: TextStyle(
+                                                                fontWeight: FontWeight.bold,
+                                                                fontSize: 13,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
-                                        
-                                        const SizedBox(height: 12),
-                                        
-                                        // Comment Content
-                                        Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(16),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF1A202C), // Darker content background
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: const Color(0xFF4A5568), width: 1), // Dark border
-                                          ),
-                                          child: Text(
-                                            comment.content,
-                                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                              color: Colors.grey[100], // Light text
-                                              height: 1.4,
-                                              fontSize: 15,
+                                      ),
+                                    ],
+                                    
+                                    // Show nested replies
+                                    if (replies.isNotEmpty) ...[
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 16),
+                                        padding: const EdgeInsets.only(left: 16),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: Colors.blue.withOpacity(0.4), // Slightly brighter border
+                                              width: 3,
                                             ),
                                           ),
                                         ),
-                                        
-                                        const SizedBox(height: 12),
-                                        
-                                        // Action buttons (Like and Reply)
-                                        Consumer<AuthService>(
-                                          builder: (context, authService, child) {
-                                            final userId = authService.currentUser?.uid;
-                                            final isLiked = userId != null && comment.likes.contains(userId);
-                                            
-                                            return Row(
-                                              children: [
-                                                // Like button
-                                                GestureDetector(
-                                                  onTap: userId != null ? () async {
-                                                    try {
-                                                      // Optimistically update UI first
-                                                      setState(() {
-                                                        final updatedComments = List<Comment>.from(_currentPost!.comments);
-                                                        final commentIndex = updatedComments.indexWhere((c) => c.id == comment.id);
-                                                        if (commentIndex != -1) {
-                                                          final likes = List<String>.from(updatedComments[commentIndex].likes);
-                                                          if (likes.contains(userId)) {
-                                                            likes.remove(userId);
-                                                          } else {
-                                                            likes.add(userId);
-                                                          }
-                                                          updatedComments[commentIndex] = updatedComments[commentIndex].copyWith(likes: likes);
-                                                          _currentPost = _currentPost!.copyWith(comments: updatedComments);
-                                                        }
-                                                      });
-                                                      
-                                                      // Then update in database
-                                                      final blogService = Provider.of<BlogService>(context, listen: false);
-                                                      await blogService.likeComment(_currentPost!.id, comment.id, userId);
-                                                    } catch (e) {
-                                                      // Revert optimistic update on error
-                                                      _loadPost();
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(content: Text('Error: $e')),
-                                                      );
-                                                    }
-                                                  } : null,
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                    decoration: BoxDecoration(
-                                                      color: isLiked ? Colors.blue.withOpacity(0.2) : const Color(0xFF4A5568), // Dark button background
-                                                      borderRadius: BorderRadius.circular(20),
-                                                      border: Border.all(
-                                                        color: isLiked ? Colors.blue : const Color(0xFF718096), // Dark border
-                                                        width: 1,
-                                                      ),
-                                                    ),
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Icon(
-                                                          isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                                                          color: isLiked ? Colors.blue : Colors.grey[300], // Light icon
-                                                          size: 16,
-                                                        ),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          '${comment.likes.length}',
-                                                          style: TextStyle(
-                                                            color: isLiked ? Colors.blue : Colors.grey[300], // Light text
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 13,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                                
-                                                const SizedBox(width: 12),
-                                                
-                                                // Reply button
-                                                GestureDetector(
-                                                  onTap: () => _toggleReply(comment.id),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                    decoration: BoxDecoration(
-                                                      color: (_replyingTo[comment.id] ?? false) ? Colors.green.withOpacity(0.2) : const Color(0xFF4A5568), // Dark button background
-                                                      borderRadius: BorderRadius.circular(20),
-                                                      border: Border.all(
-                                                        color: (_replyingTo[comment.id] ?? false) ? Colors.green : const Color(0xFF718096), // Dark border
-                                                        width: 1,
-                                                      ),
-                                                    ),
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Icon(
-                                                          Icons.reply,
-                                                          color: (_replyingTo[comment.id] ?? false) ? Colors.green : Colors.grey[300], // Light icon
-                                                          size: 16,
-                                                        ),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          'Reply',
-                                                          style: TextStyle(
-                                                            color: (_replyingTo[comment.id] ?? false) ? Colors.green : Colors.grey[300], // Light text
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 13,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                                
-                                                // Show replies count if any
-                                                if (replies.isNotEmpty) ...[
-                                                  const SizedBox(width: 16),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.blue.withOpacity(0.2), // Dark blue background
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      border: Border.all(color: Colors.blue.withOpacity(0.3)), // Dark border
-                                                    ),
-                                                    child: Text(
-                                                      '${replies.length} ${replies.length == 1 ? 'reply' : 'replies'}',
-                                                      style: TextStyle(
-                                                        color: Colors.blue[300], // Light blue text
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                        
-                                        // Reply form
-                                        if (_replyingTo[comment.id] ?? false) ...[
-                                          const SizedBox(height: 16),
-                                          Container(
-                                            padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          children: replies.map((reply) => Container(
+                                            margin: const EdgeInsets.only(bottom: 12),
+                                            padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFF1A202C), // Dark form background
+                                              color: const Color(0xFF1A202C), // Dark reply background
                                               borderRadius: BorderRadius.circular(12),
                                               border: Border.all(color: const Color(0xFF4A5568)), // Dark border
                                             ),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  'Reply to ${comment.userName}',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.green[300], // Light green text
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
                                                 Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    Consumer<AuthService>(
-                                                      builder: (context, authService, child) {
-                                                        final user = authService.currentUser;
-                                                        return CircleAvatar(
-                                                          radius: 16,
-                                                          backgroundColor: Colors.grey[600],
-                                                          backgroundImage: user?.photoURL?.isNotEmpty == true 
-                                                              ? NetworkImage(user!.photoURL!) 
-                                                              : null,
-                                                          child: user?.photoURL?.isEmpty != false 
-                                                            ? Text(
-                                                                user?.displayName?.isNotEmpty == true 
-                                                                  ? user!.displayName![0].toUpperCase()
-                                                                  : user?.email?.isNotEmpty == true
-                                                                    ? user!.email![0].toUpperCase()
-                                                                    : 'A',
-                                                                style: const TextStyle(
-                                                                  color: Colors.white,
-                                                                  fontWeight: FontWeight.bold,
-                                                                  fontSize: 14,
-                                                                ),
-                                                              )
-                                                            : null,
-                                                        );
-                                                      },
+                                                    CircleAvatar(
+                                                      radius: 16,
+                                                      backgroundColor: Colors.grey[600],
+                                                      backgroundImage: reply.userPhotoUrl.isNotEmpty 
+                                                          ? NetworkImage(reply.userPhotoUrl) 
+                                                          : null,
+                                                      child: reply.userPhotoUrl.isEmpty 
+                                                          ? Text(
+                                                              reply.userName.isNotEmpty 
+                                                                  ? reply.userName[0].toUpperCase() 
+                                                                  : '?',
+                                                              style: const TextStyle(
+                                                                color: Colors.white,
+                                                                fontWeight: FontWeight.bold,
+                                                                fontSize: 12,
+                                                              ),
+                                                            ) 
+                                                          : null,
                                                     ),
-                                                    const SizedBox(width: 12),
+                                                    const SizedBox(width: 8),
                                                     Expanded(
                                                       child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
                                                         children: [
-                                                          TextField(
-                                                            controller: _getReplyController(comment.id),
-                                                            decoration: InputDecoration(
-                                                              hintText: 'Write a reply...',
-                                                              hintStyle: TextStyle(color: Colors.grey[400]), // Light hint text
-                                                              border: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.circular(12),
-                                                                borderSide: BorderSide(color: const Color(0xFF4A5568)), // Dark border
-                                                              ),
-                                                              focusedBorder: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.circular(12),
-                                                                borderSide: const BorderSide(color: Colors.green),
-                                                              ),
-                                                              filled: true,
-                                                              fillColor: const Color(0xFF2D3748), // Dark input background
-                                                              contentPadding: const EdgeInsets.all(12),
-                                                            ),
-                                                            style: const TextStyle(
-                                                              color: Colors.white, // White text
-                                                              fontSize: 14,
-                                                            ),
-                                                            minLines: 1,
-                                                            maxLines: 3,
-                                                          ),
-                                                          const SizedBox(height: 12),
                                                           Row(
-                                                            mainAxisAlignment: MainAxisAlignment.end,
                                                             children: [
-                                                              TextButton(
-                                                                onPressed: () {
-                                                                  setState(() {
-                                                                    _replyingTo[comment.id] = false;
-                                                                    _replyControllers[comment.id]?.clear();
-                                                                  });
-                                                                },
-                                                                child: Text(
-                                                                  'Cancel',
-                                                                  style: TextStyle(color: Colors.grey[400]), // Light text
+                                                              Text(
+                                                                reply.userName,
+                                                                style: const TextStyle(
+                                                                  fontWeight: FontWeight.bold,
+                                                                  fontSize: 13,
+                                                                  color: Colors.white, // White username
                                                                 ),
                                                               ),
                                                               const SizedBox(width: 8),
-                                                              ElevatedButton(
-                                                                onPressed: _hasReplyText(comment.id) 
-                                                                  ? () => _submitReply(comment.id)
-                                                                  : null,
-                                                                style: ElevatedButton.styleFrom(
-                                                                  backgroundColor: _hasReplyText(comment.id) 
-                                                                    ? Colors.green 
-                                                                    : Colors.grey[600], // Dark disabled color
-                                                                  foregroundColor: Colors.white,
-                                                                  shape: RoundedRectangleBorder(
-                                                                    borderRadius: BorderRadius.circular(8),
-                                                                  ),
-                                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                                                ),
-                                                                child: const Text(
-                                                                  'Reply',
-                                                                  style: TextStyle(
-                                                                    fontWeight: FontWeight.bold,
-                                                                    fontSize: 13,
-                                                                  ),
+                                                              Icon(
+                                                                Icons.reply,
+                                                                size: 12,
+                                                                color: Colors.blue[400], // Light blue icon
+                                                              ),
+                                                              const SizedBox(width: 4),
+                                                              Text(
+                                                                comment.userName,
+                                                                style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  color: Colors.blue[400], // Light blue text
+                                                                  fontWeight: FontWeight.w600,
                                                                 ),
                                                               ),
                                                             ],
+                                                          ),
+                                                          Text(
+                                                            DateFormat('dd-MM-yyyy HH:mm').format(reply.createdAt),
+                                                            style: TextStyle(
+                                                              color: Colors.grey[400], // Light grey timestamp
+                                                              fontSize: 11,
+                                                            ),
                                                           ),
                                                         ],
                                                       ),
                                                     ),
                                                   ],
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                        
-                                        // Show nested replies
-                                        if (replies.isNotEmpty) ...[
-                                          const SizedBox(height: 16),
-                                          Container(
-                                            margin: const EdgeInsets.only(left: 16),
-                                            padding: const EdgeInsets.only(left: 16),
-                                            decoration: BoxDecoration(
-                                              border: Border(
-                                                left: BorderSide(
-                                                  color: Colors.blue.withOpacity(0.4), // Slightly brighter border
-                                                  width: 3,
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  reply.content,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.white, // White reply text
+                                                    height: 1.3,
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                            child: Column(
-                                              children: replies.map((reply) => Container(
-                                                margin: const EdgeInsets.only(bottom: 12),
-                                                padding: const EdgeInsets.all(12),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF1A202C), // Dark reply background
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(color: const Color(0xFF4A5568)), // Dark border
-                                                ),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        CircleAvatar(
-                                                          radius: 16,
-                                                          backgroundColor: Colors.grey[600],
-                                                          backgroundImage: reply.userPhotoUrl.isNotEmpty 
-                                                              ? NetworkImage(reply.userPhotoUrl) 
-                                                              : null,
-                                                          child: reply.userPhotoUrl.isEmpty 
-                                                              ? Text(
-                                                                  reply.userName.isNotEmpty 
-                                                                      ? reply.userName[0].toUpperCase() 
-                                                                      : '?',
-                                                                  style: const TextStyle(
-                                                                    color: Colors.white,
-                                                                    fontWeight: FontWeight.bold,
-                                                                    fontSize: 12,
-                                                                  ),
-                                                                ) 
-                                                              : null,
+                                                const SizedBox(height: 8),
+                                                // Reply like button
+                                                Consumer<AuthService>(
+                                                  builder: (context, authService, child) {
+                                                    final userId = authService.currentUser?.uid;
+                                                    final isReplyLiked = userId != null && reply.likes.contains(userId);
+                                                    
+                                                    return GestureDetector(
+                                                      onTap: userId != null ? () async {
+                                                        try {
+                                                          // Optimistically update UI first
+                                                          setState(() {
+                                                            final updatedComments = List<Comment>.from(_currentPost!.comments);
+                                                            final replyIndex = updatedComments.indexWhere((c) => c.id == reply.id);
+                                                            if (replyIndex != -1) {
+                                                              final likes = List<String>.from(updatedComments[replyIndex].likes);
+                                                              if (likes.contains(userId)) {
+                                                                likes.remove(userId);
+                                                              } else {
+                                                                likes.add(userId);
+                                                              }
+                                                              updatedComments[replyIndex] = updatedComments[replyIndex].copyWith(likes: likes);
+                                                              _currentPost = _currentPost!.copyWith(comments: updatedComments);
+                                                            }
+                                                          });
+                                                          
+                                                          // Then update in database
+                                                          final blogService = Provider.of<BlogService>(context, listen: false);
+                                                          await blogService.likeComment(_currentPost!.id, reply.id, userId);
+                                                        } catch (e) {
+                                                          // Revert optimistic update on error
+                                                          _loadPost();
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(content: Text('Error: $e')),
+                                                          );
+                                                        }
+                                                      } : null,
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: isReplyLiked ? Colors.blue.withOpacity(0.2) : const Color(0xFF4A5568), // Dark button background
+                                                          borderRadius: BorderRadius.circular(16),
+                                                          border: Border.all(
+                                                            color: isReplyLiked ? Colors.blue : const Color(0xFF718096), // Dark border
+                                                            width: 1,
+                                                          ),
                                                         ),
-                                                        const SizedBox(width: 8),
-                                                        Expanded(
-                                                          child: Column(
-                                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                                            children: [
-                                                              Row(
-                                                                children: [
-                                                                  Text(
-                                                                    reply.userName,
-                                                                    style: const TextStyle(
-                                                                      fontWeight: FontWeight.bold,
-                                                                      fontSize: 13,
-                                                                      color: Colors.white, // White username
-                                                                    ),
-                                                                  ),
-                                                                  const SizedBox(width: 8),
-                                                                  Icon(
-                                                                    Icons.reply,
-                                                                    size: 12,
-                                                                    color: Colors.blue[400], // Light blue icon
-                                                                  ),
-                                                                  const SizedBox(width: 4),
-                                                                  Text(
-                                                                    comment.userName,
-                                                                    style: TextStyle(
-                                                                      fontSize: 12,
-                                                                      color: Colors.blue[400], // Light blue text
-                                                                      fontWeight: FontWeight.w600,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(
+                                                              isReplyLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                                                              color: isReplyLiked ? Colors.blue : Colors.grey[400], // Light icon
+                                                              size: 14,
+                                                            ),
+                                                            if (reply.likes.isNotEmpty) ...[
+                                                              const SizedBox(width: 4),
                                                               Text(
-                                                                DateFormat('dd-MM-yyyy HH:mm').format(reply.createdAt),
+                                                                '${reply.likes.length}',
                                                                 style: TextStyle(
-                                                                  color: Colors.grey[400], // Light grey timestamp
-                                                                  fontSize: 11,
+                                                                  color: isReplyLiked ? Colors.blue : Colors.grey[400], // Light text
+                                                                  fontSize: 12,
+                                                                  fontWeight: FontWeight.bold,
                                                                 ),
                                                               ),
                                                             ],
-                                                          ),
+                                                          ],
                                                         ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      reply.content,
-                                                      style: const TextStyle(
-                                                        fontSize: 14,
-                                                        color: Colors.white, // White reply text
-                                                        height: 1.3,
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    // Reply like button
-                                                    Consumer<AuthService>(
-                                                      builder: (context, authService, child) {
-                                                        final userId = authService.currentUser?.uid;
-                                                        final isReplyLiked = userId != null && reply.likes.contains(userId);
-                                                        
-                                                        return GestureDetector(
-                                                          onTap: userId != null ? () async {
-                                                            try {
-                                                              // Optimistically update UI first
-                                                              setState(() {
-                                                                final updatedComments = List<Comment>.from(_currentPost!.comments);
-                                                                final replyIndex = updatedComments.indexWhere((c) => c.id == reply.id);
-                                                                if (replyIndex != -1) {
-                                                                  final likes = List<String>.from(updatedComments[replyIndex].likes);
-                                                                  if (likes.contains(userId)) {
-                                                                    likes.remove(userId);
-                                                                  } else {
-                                                                    likes.add(userId);
-                                                                  }
-                                                                  updatedComments[replyIndex] = updatedComments[replyIndex].copyWith(likes: likes);
-                                                                  _currentPost = _currentPost!.copyWith(comments: updatedComments);
-                                                                }
-                                                              });
-                                                              
-                                                              // Then update in database
-                                                              final blogService = Provider.of<BlogService>(context, listen: false);
-                                                              await blogService.likeComment(_currentPost!.id, reply.id, userId);
-                                                            } catch (e) {
-                                                              // Revert optimistic update on error
-                                                              _loadPost();
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(content: Text('Error: $e')),
-                                                              );
-                                                            }
-                                                          } : null,
-                                                          child: Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                            decoration: BoxDecoration(
-                                                              color: isReplyLiked ? Colors.blue.withOpacity(0.2) : const Color(0xFF4A5568), // Dark button background
-                                                              borderRadius: BorderRadius.circular(16),
-                                                              border: Border.all(
-                                                                color: isReplyLiked ? Colors.blue : const Color(0xFF718096), // Dark border
-                                                                width: 1,
-                                                              ),
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize: MainAxisSize.min,
-                                                              children: [
-                                                                Icon(
-                                                                  isReplyLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                                                                  color: isReplyLiked ? Colors.blue : Colors.grey[400], // Light icon
-                                                                  size: 14,
-                                                                ),
-                                                                if (reply.likes.isNotEmpty) ...[
-                                                                  const SizedBox(width: 4),
-                                                                  Text(
-                                                                    '${reply.likes.length}',
-                                                                    style: TextStyle(
-                                                                      color: isReplyLiked ? Colors.blue : Colors.grey[400], // Light text
-                                                                      fontSize: 12,
-                                                                      fontWeight: FontWeight.bold,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ],
+                                                    );
+                                                  },
                                                 ),
-                                              )).toList(),
+                                              ],
                                             ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
+                                          )).toList(),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                              );
-                            }).toList(),
-                        
-                      const SizedBox(height: 16),
+                              ),
+                            ),
+                          );
+                        }).toList(),
                     ],
                   ),
                 ),

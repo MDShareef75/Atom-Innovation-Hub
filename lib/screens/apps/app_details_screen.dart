@@ -6,6 +6,9 @@ import 'package:atoms_innovation_hub/services/analytics_service.dart';
 import 'package:atoms_innovation_hub/services/auth_service.dart';
 import 'package:atoms_innovation_hub/models/app_model.dart';
 import 'package:intl/intl.dart';
+import 'package:atoms_innovation_hub/widgets/rating_widget.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:atoms_innovation_hub/services/rating_service.dart';
 
 class AppDetailsScreen extends StatefulWidget {
   final String appId;
@@ -118,23 +121,12 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                   child: app.imageUrl.isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            app.imageUrl,
+                          child: CachedNetworkImage(
+                            imageUrl: app.imageUrl,
                             width: double.infinity,
                             height: 250,
                             fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                      : null,
-                                ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
+                            errorWidget: (context, url, error) {
                               return Container(
                                 width: double.infinity,
                                 height: 250,
@@ -189,28 +181,14 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            app.name,
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Version: ${app.version}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'By: ${app.authorName}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey[600],
-                              fontStyle: FontStyle.italic,
+                          Expanded(
+                            child: Text(
+                              app.name,
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -218,11 +196,36 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                     ),
                     Column(
                       children: [
-                        Text(
-                          '${app.downloadCount}',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              '${app.downloadCount}',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FutureBuilder<double>(
+                              future: RatingService().getAverageRating(app.id),
+                              builder: (context, snapshot) {
+                                final rating = snapshot.data ?? 0.0;
+                                return Row(
+                                  children: [
+                                    Icon(Icons.star, color: Colors.amber, size: 18),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      rating.toStringAsFixed(1),
+                                      style: TextStyle(
+                                        color: Colors.amber[800],
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
                         ),
                         const Text('Downloads'),
                       ],
@@ -243,6 +246,18 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                 Text(
                   app.description,
                   style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 24),
+                // Ratings Section
+                Builder(
+                  builder: (context) {
+                    final userId = Provider.of<AuthService>(context, listen: false).currentUser?.uid ?? '';
+                    return Column(
+                      children: [
+                        if (userId.isNotEmpty) RatingWidget(appId: app.id, userId: userId),
+                      ],
+                    );
+                  },
                 ),
                 
                 const SizedBox(height: 24),

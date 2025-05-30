@@ -7,6 +7,9 @@ import 'package:atoms_innovation_hub/services/auth_service.dart';
 import 'package:atoms_innovation_hub/services/analytics_service.dart';
 import 'package:atoms_innovation_hub/models/app_model.dart';
 import 'package:intl/intl.dart';
+import 'package:atoms_innovation_hub/widgets/rating_widget.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:atoms_innovation_hub/services/rating_service.dart';
 
 class AppsScreen extends StatelessWidget {
   const AppsScreen({super.key});
@@ -200,6 +203,7 @@ class _AppCardState extends State<_AppCard> {
   }
 
   Widget _buildMobileLayout(BuildContext context) {
+    final userId = Provider.of<AuthService>(context, listen: false).currentUser?.uid ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -218,14 +222,12 @@ class _AppCardState extends State<_AppCard> {
               child: widget.app.imageUrl.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        widget.app.imageUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: widget.app.imageUrl,
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(Icons.apps, size: 40);
-                        },
+                        errorWidget: (context, url, error) => const Icon(Icons.apps, size: 40),
                       ),
                     )
                   : const Icon(Icons.apps, size: 40),
@@ -237,13 +239,19 @@ class _AppCardState extends State<_AppCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.app.name,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.app.name,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -265,6 +273,27 @@ class _AppCardState extends State<_AppCard> {
                         icon: Icons.download,
                         label: '${widget.app.downloadCount}',
                         color: Colors.blue,
+                      ),
+                      const SizedBox(width: 8),
+                      FutureBuilder<double>(
+                        future: RatingService().getAverageRating(widget.app.id),
+                        builder: (context, snapshot) {
+                          final rating = snapshot.data ?? 0.0;
+                          return Row(
+                            children: [
+                              Icon(Icons.star, color: Colors.amber, size: 18),
+                              const SizedBox(width: 2),
+                              Text(
+                                rating.toStringAsFixed(1),
+                                style: TextStyle(
+                                  color: Colors.amber[800],
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -289,44 +318,6 @@ class _AppCardState extends State<_AppCard> {
         // Action Row
         Row(
           children: [
-            // Like/Dislike Buttons
-            Consumer<AuthService>(
-              builder: (context, authService, child) {
-                final userId = authService.currentUser?.uid;
-                final isLiked = userId != null && widget.app.likes.contains(userId);
-                final isDisliked = userId != null && widget.app.dislikes.contains(userId);
-                
-                return Row(
-                  children: [
-                    _buildLikeButton(context, isLiked, widget.app.likes.length, () async {
-                      if (userId != null) {
-                        try {
-                          await Provider.of<AppService>(context, listen: false)
-                              .likeApp(widget.app.id, userId);
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $e')),
-                          );
-                        }
-                      }
-                    }),
-                    const SizedBox(width: 12),
-                    _buildDislikeButton(context, isDisliked, widget.app.dislikes.length, () async {
-                      if (userId != null) {
-                        try {
-                          await Provider.of<AppService>(context, listen: false)
-                              .dislikeApp(widget.app.id, userId);
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $e')),
-                          );
-                        }
-                      }
-                    }),
-                  ],
-                );
-              },
-            ),
             const Spacer(),
             // Download Button
             if (widget.app.downloadUrl.isNotEmpty)
@@ -359,6 +350,7 @@ class _AppCardState extends State<_AppCard> {
   }
 
   Widget _buildDesktopLayout(BuildContext context) {
+    final userId = Provider.of<AuthService>(context, listen: false).currentUser?.uid ?? '';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -373,14 +365,12 @@ class _AppCardState extends State<_AppCard> {
           child: widget.app.imageUrl.isNotEmpty
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    widget.app.imageUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: widget.app.imageUrl,
                     width: 120,
                     height: 120,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.apps, size: 60);
-                    },
+                    errorWidget: (context, url, error) => const Icon(Icons.apps, size: 60),
                   ),
                 )
               : const Icon(Icons.apps, size: 60),
@@ -392,11 +382,17 @@ class _AppCardState extends State<_AppCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                widget.app.name,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.app.name,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
@@ -422,6 +418,27 @@ class _AppCardState extends State<_AppCard> {
                     color: Colors.blue,
                   ),
                   const SizedBox(width: 12),
+                  FutureBuilder<double>(
+                    future: RatingService().getAverageRating(widget.app.id),
+                    builder: (context, snapshot) {
+                      final rating = snapshot.data ?? 0.0;
+                      return Row(
+                        children: [
+                          Icon(Icons.star, color: Colors.amber, size: 18),
+                          const SizedBox(width: 2),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: Colors.amber[800],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 12),
                   _buildStatChip(
                     icon: Icons.calendar_today,
                     label: DateFormat('dd-MM-yyyy').format(widget.app.releaseDate),
@@ -435,44 +452,6 @@ class _AppCardState extends State<_AppCard> {
               // Action Row
               Row(
                 children: [
-                  // Like/Dislike Buttons
-                  Consumer<AuthService>(
-                    builder: (context, authService, child) {
-                      final userId = authService.currentUser?.uid;
-                      final isLiked = userId != null && widget.app.likes.contains(userId);
-                      final isDisliked = userId != null && widget.app.dislikes.contains(userId);
-                      
-                      return Row(
-                        children: [
-                          _buildLikeButton(context, isLiked, widget.app.likes.length, () async {
-                            if (userId != null) {
-                              try {
-                                await Provider.of<AppService>(context, listen: false)
-                                    .likeApp(widget.app.id, userId);
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
-                              }
-                            }
-                          }),
-                          const SizedBox(width: 16),
-                          _buildDislikeButton(context, isDisliked, widget.app.dislikes.length, () async {
-                            if (userId != null) {
-                              try {
-                                await Provider.of<AppService>(context, listen: false)
-                                    .dislikeApp(widget.app.id, userId);
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
-                              }
-                            }
-                          }),
-                        ],
-                      );
-                    },
-                  ),
                   const Spacer(),
                   // Download Button
                   if (widget.app.downloadUrl.isNotEmpty)
@@ -534,78 +513,6 @@ class _AppCardState extends State<_AppCard> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLikeButton(BuildContext context, bool isLiked, int count, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isLiked ? Colors.blue.withOpacity(0.1) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isLiked ? Colors.blue : Colors.grey[300]!,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-              color: isLiked ? Colors.blue : Colors.grey[600],
-              size: 18,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                color: isLiked ? Colors.blue : Colors.grey[700],
-                fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDislikeButton(BuildContext context, bool isDisliked, int count, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isDisliked ? Colors.red.withOpacity(0.1) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isDisliked ? Colors.red : Colors.grey[300]!,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isDisliked ? Icons.thumb_down : Icons.thumb_down_outlined,
-              color: isDisliked ? Colors.red : Colors.grey[600],
-              size: 18,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                color: isDisliked ? Colors.red : Colors.grey[700],
-                fontWeight: isDisliked ? FontWeight.bold : FontWeight.normal,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:ui';
 
 class HomeScreen extends StatefulWidget {
   final Widget child;
@@ -34,7 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _checkIfAdmin();
-    _clearImageCacheIfNeeded();
   }
 
   @override
@@ -122,82 +122,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _createAdminUser() async {
-    try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      
-      // First, try to sign in to see if the user exists
-      try {
-        await authService.signInWithEmailAndPassword('admin@atomshub.com', 'password123');
-        print('✅ Admin user authentication successful');
-        
-        // Now update Firestore to ensure admin privileges
-        if (authService.currentUser != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(authService.currentUser!.uid)
-              .set({
-            'email': 'admin@atomshub.com',
-            'name': 'Admin User',
-            'photoUrl': '',
-            'isAdmin': true,
-            'createdAt': FieldValue.serverTimestamp(),
-            'lastLogin': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-          
-          print('✅ Admin privileges updated in Firestore');
-          
-          // Refresh admin status
-          await _checkIfAdmin();
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Admin user setup completed! Status: ${_isAdmin ? "Admin" : "User"}'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        print('❌ Admin user login failed: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to setup admin user: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      print('💥 Error in admin setup: $e');
-    }
-  }
-
-  // Add method to clear image cache if needed
-  Future<void> _clearImageCacheIfNeeded() async {
-    try {
-      // Clear the image cache every time the app starts to ensure fresh images
-      await CachedNetworkImage.evictFromCache('');
-      print('🧹 Image cache cleared to ensure fresh profile pictures');
-    } catch (e) {
-      print('⚠️ Error clearing image cache: $e');
-    }
-  }
-
-  // Method to refresh profile images
-  Future<void> _refreshProfileImages(String? photoUrl) async {
-    if (photoUrl?.isNotEmpty == true) {
-      try {
-        await CachedNetworkImage.evictFromCache(photoUrl!);
-        print('🔄 Refreshed cache for profile image: $photoUrl');
-        // Force rebuild to refresh images
-        if (mounted) {
-          setState(() {});
-        }
-      } catch (e) {
-        print('⚠️ Error refreshing profile image cache: $e');
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -208,41 +132,90 @@ class _HomeScreenState extends State<HomeScreen> {
     
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: ClipRRect(
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(0), top: Radius.circular(0)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.10),
+                    Colors.blue.withOpacity(0.10),
+                    Colors.purple.withOpacity(0.10),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 2,
+        scrolledUnderElevation: 4,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black.withOpacity(0.1),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ATOM Logo
-            Image.asset(
-              'assets/images/atom_logo.png',
-              height: 32,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                // Fallback to text if logo doesn't load
-                return ShaderMask(
-                  shaderCallback: (bounds) => LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
-                  ).createShader(bounds),
-                  child: const Text(
-                    'ATOM',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
+            // Logo is outside the blur effect, so it's always clear
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.transparent, // No blur or overlay
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyanAccent.withOpacity(0.5),
+                    blurRadius: 16,
+                    spreadRadius: 2,
                   ),
-                );
-              },
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/images/atom_intelligence_at_core.png',
+                  height: 40,
+                  width: 40,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(width: 18),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ATOM Innovation Hub',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                    fontSize: 22,
+                    shadows: [
+                      Shadow(
+                        color: Colors.blueAccent.withOpacity(0.18),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Intelligence at the Core',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.cyanAccent.withOpacity(0.85),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 2,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.black.withOpacity(0.1),
         actions: [
           // Profile Section
           Container(
@@ -311,27 +284,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             break;
                           case 'profile':
                             context.go('/profile');
-                            break;
-                          case 'refresh_profile':
-                            // Refresh profile images
-                            final authService = Provider.of<AuthService>(context, listen: false);
-                            if (authService.currentUser != null) {
-                              final userStream = authService.userModelStream(authService.currentUser!.uid);
-                              userStream.first.then((userModel) {
-                                if (userModel?.photoUrl?.isNotEmpty == true) {
-                                  _refreshProfileImages(userModel!.photoUrl);
-                                }
-                              });
-                            }
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Profile images refreshed!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            break;
-                          case 'setup_admin':
-                            _createAdminUser();
                             break;
                           case 'logout':
                             Provider.of<AuthService>(context, listen: false).signOut(clearRememberedCredentials: false);
@@ -487,38 +439,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         
-                        // Refresh Profile Images
-                        PopupMenuItem(
-                          value: 'refresh_profile',
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.orange.withOpacity(0.1),
-                                  ),
-                                  child: Icon(
-                                    Icons.refresh_rounded,
-                                    size: 18,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Refresh Profile Images',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        
                         // About
                         PopupMenuItem(
                           value: 'about',
@@ -582,39 +502,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
-                        
-                        // Setup Admin (show only for testing)
-                        if (!_isAdmin)
-                          PopupMenuItem(
-                            value: 'setup_admin',
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.purple.withOpacity(0.1),
-                                    ),
-                                    child: Icon(
-                                      Icons.admin_panel_settings,
-                                      size: 18,
-                                      color: Colors.purple,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Setup Admin',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         
                         // Divider before logout
                         PopupMenuItem<String>(
@@ -691,100 +578,103 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: CircularProgressIndicator(),
               ),
             )
-          : Container(
-        height: 85,
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(25),
-          color: Theme.of(context).colorScheme.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-              spreadRadius: 0,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 40,
-              offset: const Offset(0, 16),
-              spreadRadius: 0,
-            ),
-          ],
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildNavItem(
-                context: context,
-                icon: Icons.home_rounded,
-                selectedIcon: Icons.home,
-                label: 'Home',
-                index: 0,
-                isSelected: _selectedIndex == 0,
-              ),
-              _buildNavItem(
-                context: context,
-                icon: Icons.apps_rounded,
-                selectedIcon: Icons.apps,
-                label: 'Apps',
-                index: 1,
-                isSelected: _selectedIndex == 1,
-              ),
-              _buildNavItem(
-                context: context,
-                icon: Icons.article_rounded,
-                selectedIcon: Icons.article,
-                label: 'Blog',
-                index: 2,
-                isSelected: _selectedIndex == 2,
-              ),
-              // Debug logging and conditional navigation
-              ...() {
-                print('👀 NAVIGATION BUILD: _isAdmin = $_isAdmin, checking conditions...');
-                List<Widget> items = [];
-                
-                if (!_isAdmin) {
-                  print('👤 NAVIGATION: Adding MESSAGES tab for regular user');
-                  items.add(
-                    _buildNavItem(
-                      context: context,
-                      icon: Icons.message_rounded,
-                      selectedIcon: Icons.message,
-                      label: 'Messages',
-                      index: 3,
-                      isSelected: _selectedIndex == 3,
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  height: 85,
+                  margin: const EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.10),
+                        Colors.blue.withOpacity(0.10),
+                        Colors.purple.withOpacity(0.10),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  );
-                }
-                
-                if (_isAdmin) {
-                  print('👨‍💼 NAVIGATION: Adding ADMIN tab for admin user');
-                  items.add(
-                    _buildNavItem(
-                      context: context,
-                      icon: Icons.admin_panel_settings_rounded,
-                      selectedIcon: Icons.admin_panel_settings,
-                      label: 'Admin',
-                      index: 3,
-                      isSelected: _selectedIndex == 3,
+                    borderRadius: BorderRadius.circular(25),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                        spreadRadius: 0,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 40,
+                        offset: const Offset(0, 16),
+                        spreadRadius: 0,
+                      ),
+                    ],
+                    // No border for glass effect
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildNavItem(
+                          context: context,
+                          icon: Icons.home_rounded,
+                          selectedIcon: Icons.home,
+                          label: 'Home',
+                          index: 0,
+                          isSelected: _selectedIndex == 0,
+                        ),
+                        _buildNavItem(
+                          context: context,
+                          icon: Icons.apps_rounded,
+                          selectedIcon: Icons.apps,
+                          label: 'Apps',
+                          index: 1,
+                          isSelected: _selectedIndex == 1,
+                        ),
+                        _buildNavItem(
+                          context: context,
+                          icon: Icons.article_rounded,
+                          selectedIcon: Icons.article,
+                          label: 'Blog',
+                          index: 2,
+                          isSelected: _selectedIndex == 2,
+                        ),
+                        ...() {
+                          List<Widget> items = [];
+                          if (!_isAdmin) {
+                            items.add(
+                              _buildNavItem(
+                                context: context,
+                                icon: Icons.message_rounded,
+                                selectedIcon: Icons.message,
+                                label: 'Messages',
+                                index: 3,
+                                isSelected: _selectedIndex == 3,
+                              ),
+                            );
+                          }
+                          if (_isAdmin) {
+                            items.add(
+                              _buildNavItem(
+                                context: context,
+                                icon: Icons.admin_panel_settings_rounded,
+                                selectedIcon: Icons.admin_panel_settings,
+                                label: 'Admin',
+                                index: 3,
+                                isSelected: _selectedIndex == 3,
+                              ),
+                            );
+                          }
+                          return items;
+                        }(),
+                      ],
                     ),
-                  );
-                }
-                
-                print('📊 NAVIGATION: Total conditional items added: ${items.length}');
-                return items;
-              }(),
-            ],
-          ),
-        ),
-      ),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 
@@ -883,46 +773,6 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 32,
             height: 32,
             fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey,
-              ),
-              child: const Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-            ),
-            errorWidget: (context, url, error) {
-              print('❌ Error loading profile image: $error for URL: $url');
-              return Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    userModel.name.isNotEmpty ? userModel.name[0].toUpperCase() : 'U',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
-            },
           ),
         ),
       );
@@ -970,46 +820,6 @@ class _HomeScreenState extends State<HomeScreen> {
         width: 40,
         height: 40,
         fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          width: 40,
-          height: 40,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.grey,
-          ),
-          child: const Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ),
-        ),
-        errorWidget: (context, url, error) {
-          print('❌ Error loading popup profile image: $error for URL: $url');
-          return Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.secondary,
-                ],
-              ),
-            ),
-            child: Center(
-              child: Text(
-                userModel.name.isNotEmpty ? userModel.name[0].toUpperCase() : 'U',
-                style: const TextStyle(
-                  fontSize: 20,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          );
-        },
       );
     }
     
@@ -1138,16 +948,9 @@ class HomeContent extends StatelessWidget {
                                   children: [
                                     // ATOM Logo
                                     Image.asset(
-                                      'assets/images/atom_logo.png',
+                                      'assets/images/atom_intelligence_at_core.png',
                                       height: isMobile ? 16 : 18,
                                       fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(
-                                          Icons.rocket_launch,
-                                          color: Colors.white,
-                                          size: isMobile ? 16 : 18,
-                                        );
-                                      },
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -1265,16 +1068,28 @@ class HomeContent extends StatelessWidget {
                           right: 24,
                           child: Column(
                             children: [
-                              _buildFloatingStatCard(
-                                icon: Icons.apps,
-                                label: 'Apps',
-                                value: '10+',
+                              StreamBuilder<List<AppModel>>(
+                                stream: Provider.of<AppService>(context, listen: false).getApps(),
+                                builder: (context, snapshot) {
+                                  final count = snapshot.data?.length ?? 0;
+                                  return _buildFloatingStatCard(
+                                    icon: Icons.apps,
+                                    label: 'Apps',
+                                    value: count > 0 ? '$count' : '-',
+                                  );
+                                },
                               ),
                               const SizedBox(height: 12),
-                              _buildFloatingStatCard(
-                                icon: Icons.article,
-                                label: 'Posts',
-                                value: '25+',
+                              StreamBuilder<List<BlogPostModel>>(
+                                stream: Provider.of<BlogService>(context, listen: false).getBlogPosts(),
+                                builder: (context, snapshot) {
+                                  final count = snapshot.data?.length ?? 0;
+                                  return _buildFloatingStatCard(
+                                    icon: Icons.article,
+                                    label: 'Posts',
+                                    value: count > 0 ? '$count' : '-',
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -1372,14 +1187,11 @@ class HomeContent extends StatelessWidget {
                                   app.imageUrl.isNotEmpty
                                       ? ClipRRect(
                                           borderRadius: BorderRadius.circular(8),
-                                          child: Image.network(
-                                            app.imageUrl,
+                                          child: CachedNetworkImage(
+                                            imageUrl: app.imageUrl,
                                             width: 40,
                                             height: 40,
                                             fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return const Icon(Icons.apps, size: 40);
-                                            },
                                           ),
                                         )
                                       : const Icon(Icons.apps, size: 40),
@@ -1628,31 +1440,6 @@ class HomeContent extends StatelessWidget {
                                         width: double.infinity,
                                         height: double.infinity,
                                         fit: BoxFit.cover,
-                                        placeholder: (context, url) => Container(
-                                          color: Colors.grey[300],
-                                          child: const Center(
-                                            child: CircularProgressIndicator(),
-                                          ),
-                                        ),
-                                        errorWidget: (context, error, stackTrace) => Container(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                Theme.of(context).colorScheme.primary,
-                                                Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                                              ],
-                                            ),
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              Icons.article,
-                                              size: 64,
-                                              color: Colors.white.withOpacity(0.7),
-                                            ),
-                                          ),
-                                        ),
                                       )
                                     : Container(
                                         decoration: BoxDecoration(
@@ -1663,13 +1450,6 @@ class HomeContent extends StatelessWidget {
                                               Theme.of(context).colorScheme.primary,
                                               Theme.of(context).colorScheme.primary.withOpacity(0.7),
                                             ],
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.article,
-                                            size: 64,
-                                            color: Colors.white.withOpacity(0.7),
                                           ),
                                         ),
                                       ),

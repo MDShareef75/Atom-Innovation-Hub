@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:atoms_innovation_hub/config/firebase_config.dart';
 import 'package:atoms_innovation_hub/config/router_config.dart';
 import 'package:atoms_innovation_hub/providers/theme_provider.dart';
+import 'package:atoms_innovation_hub/providers/auth_provider.dart';
 import 'package:atoms_innovation_hub/services/auth_service.dart';
 import 'package:atoms_innovation_hub/services/app_service.dart';
 import 'package:atoms_innovation_hub/services/blog_service.dart';
 import 'package:atoms_innovation_hub/services/analytics_service.dart';
 import 'package:atoms_innovation_hub/services/contact_service.dart';
+import 'package:atoms_innovation_hub/services/rating_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +28,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) => ThemeProvider(),
         ),
+        ChangeNotifierProvider<AuthProvider>(
+          create: (_) => AuthProvider(),
+        ),
         Provider<AuthService>(
           create: (_) => AuthService(),
         ),
@@ -40,6 +45,9 @@ class MyApp extends StatelessWidget {
         ),
         Provider<ContactService>(
           create: (_) => ContactService(),
+        ),
+        Provider<RatingService>(
+          create: (_) => RatingService(),
         ),
       ],
       child: Consumer<ThemeProvider>(

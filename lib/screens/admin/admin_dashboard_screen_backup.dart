@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -969,14 +970,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             child: app.imageUrl.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      app.imageUrl,
+                                    child: CachedNetworkImage(
+                                      imageUrl: app.imageUrl,
                                       width: 80,
                                       height: 80,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(Icons.apps, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5));
-                                      },
                                     ),
                                   )
                                 : Icon(Icons.apps, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
@@ -1120,14 +1118,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             child: post.imageUrl.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      post.imageUrl,
+                                    child: CachedNetworkImage(
+                                      imageUrl: post.imageUrl,
                                       width: 80,
                                       height: 80,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Icon(Icons.article, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5));
-                                      },
                                     ),
                                   )
                                 : Icon(Icons.article, size: 40, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
@@ -2860,27 +2855,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        post.imageUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: post.imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey[800],
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.broken_image, color: Colors.grey[400], size: 32),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Image failed to load',
-                                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
                       ),
                     ),
                   ),

@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../widgets/rating_widget.dart';
+import '../services/rating_service.dart';
+import '../providers/auth_provider.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final userId = authProvider.currentUser?.uid ?? '';
+
     return Scaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -129,6 +136,11 @@ class AboutScreen extends StatelessWidget {
               'ATOM Innovation Hub is developed with passion by a dedicated team committed to creating exceptional digital experiences and fostering intelligent innovation in the technology community.',
               Icons.group,
             ),
+            
+            const SizedBox(height: 32),
+            
+            // Rating Section
+            if (userId.isNotEmpty) RatingWidget(appId: 'about_app', userId: userId),
             
             const SizedBox(height: 32),
             

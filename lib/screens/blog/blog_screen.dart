@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:atoms_innovation_hub/services/blog_service.dart';
 import 'package:atoms_innovation_hub/models/blog_post_model.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class BlogScreen extends StatelessWidget {
   const BlogScreen({super.key});
@@ -110,23 +111,11 @@ class _BlogPostCard extends StatelessWidget {
           children: [
             // Blog Post Image
             if (post.imageUrl.isNotEmpty)
-              Image.network(
-                post.imageUrl,
+              CachedNetworkImage(
+                imageUrl: post.imageUrl,
                 width: double.infinity,
                 height: 300,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: double.infinity,
-                    height: 300,
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                    child: Icon(
-                      Icons.article,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  );
-                },
               ),
             
             // Blog Post Content

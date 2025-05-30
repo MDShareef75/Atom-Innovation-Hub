@@ -4,6 +4,7 @@ import 'package:atoms_innovation_hub/models/blog_post_model.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
 
 class BlogService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -465,6 +466,33 @@ class BlogService {
     } catch (e) {
       print('Error liking comment: $e');
       throw e;
+    }
+  }
+
+  // Upload file using FilePicker result (supports both web and mobile)
+  Future<String> uploadFileFromPicker(PlatformFile file, String path) async {
+    try {
+      Reference ref = _storage.ref().child(path);
+      UploadTask uploadTask;
+      if (kIsWeb) {
+        if (file.bytes != null) {
+          uploadTask = ref.putData(file.bytes!);
+        } else {
+          throw Exception('No file data available for web upload');
+        }
+      } else {
+        if (file.path != null) {
+          File fileObj = File(file.path!);
+          uploadTask = ref.putFile(fileObj);
+        } else {
+          throw Exception('No file path available for mobile upload');
+        }
+      }
+      TaskSnapshot taskSnapshot = await uploadTask;
+      return await taskSnapshot.ref.getDownloadURL();
+    } catch (e) {
+      print('Error uploading file from picker: $e');
+      rethrow;
     }
   }
 } 
