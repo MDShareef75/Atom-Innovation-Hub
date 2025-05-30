@@ -559,7 +559,12 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 85,
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(25),
+                  topRight: Radius.circular(25),
+                  bottomLeft: Radius.circular(0),
+                  bottomRight: Radius.circular(0),
+                ),
                 color: Theme.of(context).colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
@@ -579,7 +584,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             )
           : ClipRRect(
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(25),
+                topRight: Radius.circular(25),
+                bottomLeft: Radius.circular(0),
+                bottomRight: Radius.circular(0),
+              ),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: Container(
@@ -595,7 +605,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(25),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(25),
+                      topRight: Radius.circular(25),
+                      bottomLeft: Radius.circular(0),
+                      bottomRight: Radius.circular(0),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.08),
@@ -946,11 +961,11 @@ class HomeContent extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // ATOM Logo
-                                    Image.asset(
-                                      'assets/images/atom_intelligence_at_core.png',
-                                      height: isMobile ? 16 : 18,
-                                      fit: BoxFit.contain,
+                                    // Rocket Icon instead of image
+                                    Icon(
+                                      Icons.rocket_launch,
+                                      color: Colors.white,
+                                      size: isMobile ? 18 : 22,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(

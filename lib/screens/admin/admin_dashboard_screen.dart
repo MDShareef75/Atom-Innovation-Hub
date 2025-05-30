@@ -46,7 +46,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this); // Changed from 5 to 6
+    _tabController = TabController(length: 7, vsync: this); // Changed from 6 to 7
     _loadAnalytics();
   }
 
@@ -101,6 +101,101 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         );
       }
     }
+  }
+
+  Widget _buildRecentActivity() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Recent Activity',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            // Add your recent activity widgets here
+            const Center(
+              child: Text('No recent activity'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Quick Actions',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildActionButton(
+                  icon: Icons.add,
+                  label: 'Add App',
+                  onTap: () {
+                    // Add app action
+                  },
+                ),
+                _buildActionButton(
+                  icon: Icons.article,
+                  label: 'New Post',
+                  onTap: () {
+                    // New post action
+                  },
+                ),
+                _buildActionButton(
+                  icon: Icons.people,
+                  label: 'Manage Users',
+                  onTap: () {
+                    // Manage users action
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).colorScheme.primary),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -229,6 +324,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     ),
                   ),
                 ),
+                Tab(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.onSurface),
+                        const SizedBox(width: 6),
+                        const Text('Online Users'),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -261,6 +369,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     _buildCustomersTab(),
                     _buildCommentsTab(),
                     _buildMessagesTab(),
+                    _buildOnlineUsersTab(),
                   ],
                 ),
               ),
@@ -296,6 +405,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 backgroundColor: Colors.blue,
               ),
             );
+          } else if (currentTab == 6) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Online users are displayed in the Online Users tab'),
+                backgroundColor: Colors.blue,
+              ),
+            );
           } else {
             _showAddContentDialog();
           }
@@ -306,6 +422,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Widget _buildOverviewTab() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAnalyticsSummary(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalyticsSummary() {
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -895,6 +1027,71 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               ),
             ),
           ],
+          // In the Overview tab widget (e.g., _buildOverviewTab), add this section at the top:
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.circle, color: Colors.green, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Online Users', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('users').where('isOnline', isEqualTo: true).snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Text('No users online', style: TextStyle(color: Colors.grey[600]));
+                        }
+                        final users = snapshot.data!.docs;
+                        return Wrap(
+                          spacing: 24,
+                          runSpacing: 16,
+                          children: users.map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final name = data['name'] ?? 'User';
+                            final photoUrl = data['photoUrl'] ?? '';
+                            final lastActive = data['lastActive'] != null ? (data['lastActive'] as Timestamp).toDate() : null;
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                                  child: photoUrl.isEmpty ? Icon(Icons.person, size: 22) : null,
+                                ),
+                                const SizedBox(width: 10),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
+                                    if (lastActive != null)
+                                      Text('Logged in since: ' + DateFormat('dd MMM, HH:mm').format(lastActive), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                  ],
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2911,11 +3108,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   uploadStatus = 'Creating blog post...';
                 });
                 try {
+                  final authService = Provider.of<AuthService>(context, listen: false);
+                  final currentUser = authService.currentUser;
+                  final userModel = currentUser != null 
+                      ? await authService.userModelStream(currentUser.uid).first
+                      : null;
                   await _blogService.addBlogPost(
                     title: titleController.text,
                     content: contentController.text,
                     imageUrl: imageUrlController.text,
                     tags: tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
+                    authorId: currentUser?.uid ?? '',
+                    authorName: userModel?.name ?? 'Admin',
                   );
                   if (mounted) {
                     Navigator.pop(context);
@@ -6099,5 +6303,101 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         ),
       ),
     );
+  }
+
+  Widget _buildOnlineUsersTab() {
+    final authService = Provider.of<AuthService>(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Tab logo and title
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Icon(Icons.people_alt, size: 32, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 12),
+              Text(
+                'Online Users',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: authService.onlineUsers,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text('Error: ${snapshot.error}'),
+                );
+              }
+
+              final docs = snapshot.data?.docs ?? [];
+              final onlineUsers = docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+
+              if (onlineUsers.isEmpty) {
+                return const Center(
+                  child: Text('No users currently online'),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: onlineUsers.length,
+                itemBuilder: (context, index) {
+                  final user = onlineUsers[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: user['photoUrl'] != null && user['photoUrl'].isNotEmpty
+                            ? CachedNetworkImageProvider(user['photoUrl'])
+                            : null,
+                        child: user['photoUrl'] == null || user['photoUrl'].isEmpty
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(user['name'] ?? 'Unknown User'),
+                      subtitle: Text(
+                        user['lastActive'] != null
+                            ? 'Logged in since: ${_formatTimestampAmPm(user['lastActive'])}'
+                            : '',
+                      ),
+                      trailing: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.green,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withOpacity(0.3),
+                              blurRadius: 4,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatTimestampAmPm(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    return DateFormat('MMM dd, yyyy • hh:mm a').format(date);
   }
 } 

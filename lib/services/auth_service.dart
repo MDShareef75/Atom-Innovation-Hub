@@ -20,6 +20,14 @@ class AuthService {
   // Auth state changes stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  // Online users stream
+  Stream<QuerySnapshot> get onlineUsers {
+    return _firestore
+        .collection('users')
+        .where('isOnline', isEqualTo: true)
+        .snapshots();
+  }
+
   // User model stream
   Stream<UserModel?> userModelStream(String userId) {
     return _firestore
@@ -73,6 +81,12 @@ class AuthService {
       // Save credentials for remember me
       await saveCredentials(email, password, rememberMe);
       
+      // Set online status
+      await _firestore.collection('users').doc(userCredential.user!.uid).update({
+        'isOnline': true,
+        'lastActive': FieldValue.serverTimestamp(),
+      });
+      
       return userCredential;
     } catch (e) {
       rethrow;
@@ -109,6 +123,12 @@ class AuthService {
         await _updateLastLogin(userCredential.user!.uid);
       }
       
+      // Set online status
+      await _firestore.collection('users').doc(userCredential.user!.uid).update({
+        'isOnline': true,
+        'lastActive': FieldValue.serverTimestamp(),
+      });
+      
       return userCredential;
     } catch (e) {
       rethrow;
@@ -118,7 +138,11 @@ class AuthService {
   // Sign out
   Future<void> signOut({bool clearRememberedCredentials = false}) async {
     try {
-      // Clear saved credentials if requested or if remember me is off
+      if (currentUser != null) {
+        await _firestore.collection('users').doc(currentUser!.uid).update({
+          'isOnline': false,
+        });
+      }
       if (clearRememberedCredentials) {
         await clearSavedCredentials();
       } else {

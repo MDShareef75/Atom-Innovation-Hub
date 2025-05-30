@@ -342,7 +342,7 @@ class _BlogPostScreenState extends State<BlogPostScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ATOM Innovation Hub'),
+        title: const Text('Blog Details'),
       ),
       body: FutureBuilder<BlogPostModel?>(
         future: _postFuture,
