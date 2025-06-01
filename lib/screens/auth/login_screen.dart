@@ -154,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: 120,
                 height: 120,
                 child: Image.asset(
-                  'assets/images/atom_logo.png',
+                  'assets/images/atom_intelligence_at_core.png',
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
                     return Icon(

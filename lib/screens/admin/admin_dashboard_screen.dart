@@ -2943,6 +2943,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
     bool isUploading = false;
     String uploadStatus = '';
+    bool useImageUrl = true;
+    Uint8List? selectedImageBytes;
+    String? selectedImageName;
 
     showDialog(
       context: context,
@@ -3047,26 +3050,123 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text('Image URL', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                  
+                  // Image Section with Toggle
+                  Row(
+                    children: [
+                      Text('Blog Image', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Switch(
+                        value: useImageUrl,
+                        onChanged: (value) {
+                          setState(() {
+                            useImageUrl = value;
+                            if (!value) {
+                              selectedImageBytes = null;
+                              selectedImageName = null;
+                            }
+                          });
+                        },
+                        activeColor: Colors.blue,
+                      ),
+                      Text(useImageUrl ? 'URL' : 'Upload', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF111827),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF374151)),
-                    ),
-                    child: TextField(
-                      controller: imageUrlController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Enter image URL (optional)...',
-                        hintStyle: TextStyle(color: Colors.grey[500]),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.all(12),
-                        prefixIcon: Icon(Icons.image, color: Colors.grey[500]),
+                  
+                  if (useImageUrl) ...[
+                    // URL Input
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF374151)),
+                      ),
+                      child: TextField(
+                        controller: imageUrlController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Enter image URL (optional)...',
+                          hintStyle: TextStyle(color: Colors.grey[500]),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.all(12),
+                          prefixIcon: Icon(Icons.link, color: Colors.grey[500]),
+                        ),
                       ),
                     ),
-                  ),
+                  ] else ...[
+                    // File Upload
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF111827),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF374151)),
+                            ),
+                            child: Text(
+                              selectedImageName ?? 'No file selected',
+                              style: TextStyle(color: Colors.grey[400]),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            try {
+                              final result = await FilePicker.platform.pickFiles(
+                                type: FileType.image,
+                                allowMultiple: false,
+                              );
+
+                              if (result != null && result.files.isNotEmpty) {
+                                final file = result.files.first;
+                                setState(() {
+                                  selectedImageBytes = file.bytes;
+                                  selectedImageName = file.name;
+                                  uploadStatus = 'Image selected: ${file.name}';
+                                });
+                              }
+                            } catch (e) {
+                              setState(() {
+                                uploadStatus = 'Error selecting image: $e';
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.upload_file, size: 16),
+                          label: const Text('Choose File'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[600],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    // Image Preview
+                    if (selectedImageBytes != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF374151)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            selectedImageBytes!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                  
                   const SizedBox(height: 16),
                   Text('Tags', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
@@ -3089,6 +3189,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       maxLines: 2,
                     ),
                   ),
+                  
+                  if (uploadStatus.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      uploadStatus,
+                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3116,10 +3224,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   await _blogService.addBlogPost(
                     title: titleController.text,
                     content: contentController.text,
-                    imageUrl: imageUrlController.text,
+                    imageUrl: useImageUrl ? imageUrlController.text : '',
                     tags: tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
                     authorId: currentUser?.uid ?? '',
                     authorName: userModel?.name ?? 'Admin',
+                    webImageBytes: !useImageUrl ? selectedImageBytes : null,
+                    imageName: !useImageUrl ? selectedImageName : null,
                   );
                   if (mounted) {
                     Navigator.pop(context);
