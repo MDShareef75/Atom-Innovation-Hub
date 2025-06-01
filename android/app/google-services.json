@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "515741927926",
+    "project_id": "atoms-innovation-hub-5fbd0",
+    "storage_bucket": "atoms-innovation-hub-5fbd0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:515741927926:android:e2ff316711a25d9e619fd7",
+        "android_client_info": {
+          "package_name": "com.atoms.innovationhub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "515741927926-lc9eja8rh6221m35ndq785qbdsgp2att.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3V6VS82-_DdMUYIGdCvSxCc_4tAolLkA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "515741927926-lc9eja8rh6221m35ndq785qbdsgp2att.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -16,6 +16,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:ui';
+import 'package:atoms_innovation_hub/services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final Widget child;
@@ -217,6 +218,55 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // Notification Bell Icon
+          Consumer2<NotificationService, AuthService>(
+            builder: (context, notificationService, authService, _) {
+              if (authService.currentUser == null) return SizedBox.shrink();
+              return StreamBuilder<List<Map<String, dynamic>>>(
+                stream: notificationService.getUserNotifications(),
+                builder: (context, snapshot) {
+                  final notifications = snapshot.data ?? [];
+                  final unreadCount = notifications.where((n) => n['isRead'] == false).length;
+                  return Stack(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.notifications_none_rounded, color: Colors.white),
+                        tooltip: 'Notifications',
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                            ),
+                            builder: (context) {
+                              return NotificationPanel(notifications: notifications, notificationService: notificationService);
+                            },
+                          );
+                        },
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              unreadCount.toString(),
+                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
           // Profile Section
           Container(
             margin: const EdgeInsets.only(right: 16),
@@ -287,6 +337,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             break;
                           case 'logout':
                             Provider.of<AuthService>(context, listen: false).signOut(clearRememberedCredentials: false);
+                            if (context.mounted) {
+                              context.go('/login');
+                            }
                             break;
                         }
                       },
@@ -767,11 +820,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTopProfileImage(UserModel? userModel, User? authUser) {
-    print('🖼️ Building top profile image - userModel: ${userModel?.name}, photoUrl: ${userModel?.photoUrl}');
+    print('🖼️ Building top profile image - userModel: [32m${userModel?.name}[0m, photoUrl: [32m${userModel?.photoUrl}[0m');
     
-    if (userModel?.photoUrl?.isNotEmpty == true) {
-      print('✅ Profile image URL found: ${userModel!.photoUrl}');
-      
+    if (userModel?.photoUrl != null && userModel!.photoUrl!.isNotEmpty) {
+      print('✅ Profile image URL found: ${userModel.photoUrl}');
       return Container(
         width: 36,
         height: 36,
@@ -794,6 +846,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     print('📝 No profile image, showing initials for: ${userModel?.name ?? authUser?.displayName ?? authUser?.email}');
+    String initials = 'U';
+    if (userModel?.name != null && userModel!.name!.isNotEmpty) {
+      initials = userModel.name![0].toUpperCase();
+    } else if (authUser?.displayName != null && authUser!.displayName!.isNotEmpty) {
+      initials = authUser.displayName![0].toUpperCase();
+    } else if (authUser?.email != null && authUser!.email!.isNotEmpty) {
+      initials = authUser.email![0].toUpperCase();
+    }
     return Container(
       width: 36,
       height: 36,
@@ -808,13 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Center(
         child: Text(
-          userModel?.name?.isNotEmpty == true 
-              ? userModel!.name[0].toUpperCase() 
-              : authUser?.displayName?.isNotEmpty == true
-                  ? authUser!.displayName![0].toUpperCase()
-                  : authUser?.email?.isNotEmpty == true
-                      ? authUser!.email![0].toUpperCase()
-                      : 'U',
+          initials,
           style: const TextStyle(
             fontSize: 18,
             color: Colors.white,
@@ -828,8 +882,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildPopupProfileImage(UserModel? userModel, User? authUser) {
     print('🖼️ Building popup profile image - userModel: ${userModel?.name}, photoUrl: ${userModel?.photoUrl}');
     
-    if (userModel?.photoUrl?.isNotEmpty == true) {
-      print('✅ Popup profile image URL found: ${userModel!.photoUrl}');
+    if (userModel?.photoUrl != null && userModel!.photoUrl!.isNotEmpty) {
+      print('✅ Popup profile image URL found: ${userModel.photoUrl}');
       return CachedNetworkImage(
         imageUrl: userModel.photoUrl!,
         width: 40,
@@ -839,6 +893,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     print('📝 No popup profile image, showing initials for: ${userModel?.name ?? authUser?.displayName ?? authUser?.email}');
+    String initials = 'U';
+    if (userModel?.name != null && userModel!.name!.isNotEmpty) {
+      initials = userModel.name![0].toUpperCase();
+    } else if (authUser?.displayName != null && authUser!.displayName!.isNotEmpty) {
+      initials = authUser.displayName![0].toUpperCase();
+    } else if (authUser?.email != null && authUser!.email!.isNotEmpty) {
+      initials = authUser.email![0].toUpperCase();
+    }
     return Container(
       width: 40,
       height: 40,
@@ -853,13 +915,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Center(
         child: Text(
-          userModel?.name?.isNotEmpty == true 
-              ? userModel!.name[0].toUpperCase() 
-              : authUser?.displayName?.isNotEmpty == true
-                  ? authUser!.displayName![0].toUpperCase()
-                  : authUser?.email?.isNotEmpty == true
-                      ? authUser!.email![0].toUpperCase()
-                      : 'U',
+          initials,
           style: const TextStyle(
             fontSize: 20,
             color: Colors.white,
@@ -1833,6 +1889,96 @@ class HomeContent extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Notification Panel Widget
+class NotificationPanel extends StatelessWidget {
+  final List<Map<String, dynamic>> notifications;
+  final NotificationService notificationService;
+
+  const NotificationPanel({super.key, required this.notifications, required this.notificationService});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Notifications', style: Theme.of(context).textTheme.titleLarge),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: notifications.isEmpty ? null : () async {
+                        await notificationService.markAllAsRead();
+                      },
+                      child: const Text('Mark all as read'),
+                    ),
+                    TextButton(
+                      onPressed: notifications.isEmpty ? null : () async {
+                        await notificationService.clearAllNotifications();
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Clear all'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const Divider(),
+            if (notifications.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32.0),
+                child: Center(child: Text('No notifications')),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final n = notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        n['isRead'] == true ? Icons.notifications : Icons.notifications_active,
+                        color: n['isRead'] == true ? Colors.grey : Theme.of(context).colorScheme.primary,
+                      ),
+                      title: Text(n['title'] ?? 'Notification'),
+                      subtitle: Text(n['body'] ?? ''),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (n['isRead'] != true)
+                            IconButton(
+                              icon: Icon(Icons.mark_email_read, color: Colors.green),
+                              tooltip: 'Mark as read',
+                              onPressed: () async {
+                                await notificationService.markAsRead(n['id']);
+                              },
+                            ),
+                          IconButton(
+                            icon: Icon(Icons.delete, color: Colors.red),
+                            tooltip: 'Delete',
+                            onPressed: () async {
+                              await notificationService.deleteNotification(n['id']);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -6,6 +6,8 @@ import 'package:atoms_innovation_hub/services/app_service.dart';
 import 'package:atoms_innovation_hub/services/blog_service.dart';
 import 'package:atoms_innovation_hub/services/contact_service.dart';
 import 'package:atoms_innovation_hub/services/rating_service.dart';
+import 'package:atoms_innovation_hub/services/fcm_service.dart';
+import 'package:atoms_innovation_hub/services/notification_service.dart';
 import 'package:atoms_innovation_hub/models/app_model.dart';
 import 'package:atoms_innovation_hub/models/blog_post_model.dart';
 import 'package:atoms_innovation_hub/models/contact_message_model.dart';
@@ -38,6 +40,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   String _sortBy = 'name'; // 'name', 'email', 'created'
   bool _sortAscending = true;
   
+  // Add state for notification search and filter
+  String _notificationSearchQuery = '';
+  String _notificationStatusFilter = 'all'; // 'all', 'read', 'unread'
+  
   // Service instances
   late AppService _appService;
   late BlogService _blogService;
@@ -46,7 +52,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this); // Changed from 6 to 7
+    _tabController = TabController(length: 8, vsync: this); // Changed from 7 to 8
     _loadAnalytics();
   }
 
@@ -337,6 +343,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     ),
                   ),
                 ),
+                Tab(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.notifications, size: 18, color: Theme.of(context).colorScheme.onSurface),
+                        const SizedBox(width: 6),
+                        const Text('Notifications'),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -370,6 +389,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     _buildCommentsTab(),
                     _buildMessagesTab(),
                     _buildOnlineUsersTab(),
+                    _buildNotificationsTab(),
                   ],
                 ),
               ),
@@ -409,6 +429,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Online users are displayed in the Online Users tab'),
+                backgroundColor: Colors.blue,
+              ),
+            );
+          } else if (currentTab == 7) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Notifications are displayed in the Notifications tab'),
                 backgroundColor: Colors.blue,
               ),
             );
@@ -6399,5 +6426,233 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   String _formatTimestampAmPm(Timestamp timestamp) {
     final date = timestamp.toDate();
     return DateFormat('MMM dd, yyyy • hh:mm a').format(date);
+  }
+
+  Future<void> _testFCMTokenStorage() async {
+    try {
+      final fcmService = FCMService();
+      
+      // Check current user's token
+      final hasValidToken = await fcmService.checkCurrentUserToken();
+      
+      if (hasValidToken) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('FCM token is valid and stored correctly'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Get all users with tokens
+        final usersWithTokens = await fcmService.getAllUsersWithTokens();
+        
+        if (usersWithTokens.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No users found with FCM tokens'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          // Show dialog with token information
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('FCM Token Status'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total users with tokens: ${usersWithTokens.length}'),
+                      const SizedBox(height: 16),
+                      ...usersWithTokens.map((user) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('User ID: ${user['userId']}'),
+                          Text('Token: ${user['fcmToken']}'),
+                          Text('Last Updated: ${user['lastTokenUpdate']?.toDate()}'),
+                          const Divider(),
+                        ],
+                      )),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking FCM tokens: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Add this to your build method where you want the test button
+  Widget _buildFCMTestButton() {
+    return ElevatedButton.icon(
+      onPressed: _testFCMTokenStorage,
+      icon: const Icon(Icons.notifications),
+      label: const Text('Test FCM Tokens'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildNotificationsTab() {
+    return Consumer<NotificationService>(
+      builder: (context, notificationService, _) {
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: notificationService.getAllNotifications(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            var notifications = snapshot.data ?? [];
+
+            // Apply status filter
+            if (_notificationStatusFilter == 'read') {
+              notifications = notifications.where((n) => n['isRead'] == true).toList();
+            } else if (_notificationStatusFilter == 'unread') {
+              notifications = notifications.where((n) => n['isRead'] == false).toList();
+            }
+
+            // Apply search filter
+            if (_notificationSearchQuery.isNotEmpty) {
+              final q = _notificationSearchQuery.toLowerCase();
+              notifications = notifications.where((n) {
+                final title = (n['title'] ?? '').toString().toLowerCase();
+                final body = (n['body'] ?? '').toString().toLowerCase();
+                final userId = (n['userId'] ?? '').toString().toLowerCase();
+                return title.contains(q) || body.contains(q) || userId.contains(q);
+              }).toList();
+            }
+
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Row(
+                    children: [
+                      // Search bar
+                      Expanded(
+                        child: TextField(
+                          decoration: InputDecoration(
+                            hintText: 'Search notifications...',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _notificationSearchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _notificationSearchQuery = '';
+                                      });
+                                    },
+                                  )
+                                : null,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _notificationSearchQuery = value;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Filter dropdown
+                      DropdownButton<String>(
+                        value: _notificationStatusFilter,
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('All')),
+                          DropdownMenuItem(value: 'unread', child: Text('Unread')),
+                          DropdownMenuItem(value: 'read', child: Text('Read')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _notificationStatusFilter = value;
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        underline: const SizedBox(),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: notifications.isEmpty
+                      ? const Center(child: Text('No notifications found.'))
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: notifications.length,
+                          separatorBuilder: (_, __) => const Divider(),
+                          itemBuilder: (context, index) {
+                            final n = notifications[index];
+                            return ListTile(
+                              leading: Icon(
+                                n['isRead'] == true ? Icons.notifications : Icons.notifications_active,
+                                color: n['isRead'] == true ? Colors.grey : Theme.of(context).colorScheme.primary,
+                              ),
+                              title: Text(n['title'] ?? 'Notification'),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (n['body'] != null && n['body'].toString().isNotEmpty)
+                                    Text(n['body']),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.person, size: 14, color: Colors.grey),
+                                      const SizedBox(width: 4),
+                                      Text(n['userId'] ?? 'Unknown', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                      const SizedBox(width: 12),
+                                      Icon(Icons.access_time, size: 14, color: Colors.grey),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        n['timestamp'] != null
+                                            ? (n['timestamp'] as Timestamp).toDate().toString().substring(0, 16)
+                                            : 'No time',
+                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              trailing: n['isRead'] == true
+                                  ? const Chip(label: Text('Read'), backgroundColor: Colors.greenAccent)
+                                  : const Chip(label: Text('Unread'), backgroundColor: Colors.orangeAccent),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 } 

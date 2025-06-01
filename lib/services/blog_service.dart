@@ -5,11 +5,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:atoms_innovation_hub/services/fcm_service.dart';
 
 class BlogService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final String _collection = 'blog_posts';
+  final FCMService _fcmService = FCMService();
 
   // Get all blog posts
   Stream<List<BlogPostModel>> getBlogPosts() {
@@ -111,6 +113,19 @@ class BlogService {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Send notification to all users
+      await _fcmService.sendNotificationToAllUsers(
+        title: 'New Blog Post',
+        body: '${title ?? post!.title} - Check out the latest post from ${authorName ?? post!.authorName}!',
+        type: 'new_blog',
+        contentId: docRef.id,
+        additionalData: {
+          'postTitle': title ?? post!.title,
+          'authorName': authorName ?? post!.authorName,
+          'tags': tags ?? post!.tags,
+        },
+      );
       
       return docRef.id;
     } catch (e) {
