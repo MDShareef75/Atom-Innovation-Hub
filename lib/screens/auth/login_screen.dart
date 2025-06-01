@@ -149,20 +149,14 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Logo and Title
+              // Brand Image
               Container(
-                width: 120,
-                height: 120,
+                width: 90,
+                height: 90,
+                margin: const EdgeInsets.only(bottom: 16),
                 child: Image.asset(
                   'assets/images/atom_intelligence_at_core.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.polymer,
-                      size: 80,
-                      color: Theme.of(context).colorScheme.primary,
-                    );
-                  },
                 ),
               ),
               const SizedBox(height: 24),

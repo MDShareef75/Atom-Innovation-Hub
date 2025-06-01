@@ -5,11 +5,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:atoms_innovation_hub/services/fcm_service.dart';
 
 class AppService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final String _collection = 'applications';
+  final FCMService _fcmService = FCMService();
 
   // Get all applications
   Stream<List<AppModel>> getApps() {
@@ -136,6 +138,19 @@ class AppService {
         'imageUploadedAt': uploadedImageName != null ? now : null,
         'apkUploadedAt': uploadedApkName != null ? now : null,
       });
+
+      // Send notification to all users
+      await _fcmService.sendNotificationToAllUsers(
+        title: 'New App Available!',
+        body: '$name (v$version) has been added to the hub. Check it out!',
+        type: 'new_app',
+        contentId: docRef.id,
+        additionalData: {
+          'appName': name,
+          'version': version,
+          'authorName': authorName,
+        },
+      );
       
       return docRef.id;
     } catch (e) {
@@ -170,7 +185,6 @@ class AppService {
         'likes': [],
         'dislikes': [],
       });
-      
       return docRef.id;
     } catch (e) {
       rethrow;
